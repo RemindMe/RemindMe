@@ -1,0 +1,1 @@
+const should = require('should');

@@ -1,0 +1,15 @@
+{
+	"interval": 3600000,
+	"ntp": {
+	},
+	"github": {
+		"username": "SomeUser",
+		"token": "token-from-personal-access-tokens"
+	},
+	"mongo": {
+		"host": "mongo-hostname:5000",
+		"database": "database-name",
+		"username": "some-username",
+		"password": "some-password"
+	}
+}

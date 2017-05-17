@@ -1,0 +1,31 @@
+{
+  "name": "remindme",
+  "description": "A RemindMe bot for Github",
+  "version": "0.1.0",
+  "author": "Josh Junon (http://github.com/qix-)",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "pretest": "xo",
+    "test": "node test.js",
+    "start": "node index.js"
+  },
+  "files": [
+    "index.js",
+    "remind.pegjs"
+  ],
+  "repository": "remindme/remindme",
+  "devDependencies": {
+    "should": "^11.2.1",
+    "xo": "^0.18.2"
+  },
+  "dependencies": {
+    "async": "^2.4.0",
+    "chalk": "^1.1.3",
+    "got": "^6.7.1",
+    "mongodb": "^2.2.26",
+    "mongodb-lock": "^0.4.0",
+    "pegjs": "^0.10.0",
+    "sntp": "^2.0.2"
+  }
+}
