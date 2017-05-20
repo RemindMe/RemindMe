@@ -12,7 +12,7 @@ const config = require('./config.json');
 
 const userRegex = new RegExp(`@${config.github.username}`, 'ig');
 const userDateRegex = new RegExp(`^[\\t\\s]*@${config.github.username}[\\t\\s]+([^\\r\\n]+?)(?:[\\t\\s]+to[\\t\\s]*[^\\r\\n]*)?$`, 'igum');
-const userLower = `@${config.github.username}`.toLowerCase();
+const userLower = config.github.username.toLowerCase();
 
 const cannedLeadIns = [
 	// Want to add some? Make sure they're cordial!
