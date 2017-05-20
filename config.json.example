@@ -4,7 +4,8 @@
 	},
 	"github": {
 		"username": "SomeUser",
-		"token": "token-from-personal-access-tokens"
+		"token": "token-from-personal-access-tokens",
+		"userAgent": "Some User Agent String - run by @YourUsername"
 	},
 	"mongo": {
 		"host": "mongo-hostname:5000",
