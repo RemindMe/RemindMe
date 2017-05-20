@@ -1,6 +1,8 @@
 const async = require('async');
 const chalk = require('chalk');
+// const grl = require('global-request-logger');
 const got = require('got');
+const httpDebug = require('http-debug');
 const mongodb = require('mongodb');
 const mongodbLock = require('mongodb-lock');
 const sntp = require('sntp');
@@ -45,6 +47,19 @@ function parseDate(body) {
 	}
 	return date;
 }
+
+function makeBody(body) {
+	const result = {};
+
+	for (const k of Object.keys(ghAuth)) {
+		result[k] = ghAuth[k];
+	}
+
+	result.body = JSON.stringify(body);
+	return result;
+}
+
+httpDebug.http.debug = 1;
 
 mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 	if (err) {
@@ -234,12 +249,60 @@ mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 					return c;
 				})),
 
+			// Parallel: Send Reaction + Comment / Mark as read / Commit record / Send analytics
 			(notifications, comments, cb) => {
-				log.inspect(comments);
-				cb();
-			},
+				// GitHub asks that we sparse out write requests to 1 second each.
+				// For more information, see https://developer.github.com/guides/best-practices-for-integrators/#dealing-with-rate-limits
+				//
+				// Due to this, we create a queue object, limit it to 1 at a time, and then
+				// spread out the payloads over 1-second intervals.
+				const taskLimiter = async.queue(
+					(fn, cb) => fn(err => setTimeout(() => cb(err), 1000)),
+					1);
 
-			// TODO Parallel: Send Reaction + Comment / Mark as read / Commit record / Send analytics
+				async.each(comments,
+					(c, cb) => async.parallel([
+						cb => {
+							log.info(`respond: ${c.url}`);
+							cb();
+						},
+
+						// Mark as read
+						cb => async.each(notifications,
+							(n, cb) => taskLimiter.push(
+								cb => got.patch(n.url, ghAuth)
+									.then(() => cb())
+									.catch(cb),
+								cb),
+							cb),
+
+						// Comment
+						cb => {
+							if (c.remindAction.comment) {
+								taskLimiter.push(
+									cb => got.post(`${c.issue_url}/comments`, makeBody({body: c.remindAction.comment}))
+										.then(() => cb())
+										.catch(cb),
+									cb);
+							} else {
+								cb();
+							}
+						},
+
+						// Reactions
+						cb => async.each(c.remindAction.reactions,
+							(reaction, cb) => taskLimiter.push(
+								cb => got.post(`${c.url}/reactions`, makeBody({content: reaction}))
+									.then(() => cb())
+									.catch(cb),
+								cb),
+							cb)
+
+						// TODO MongoDB entries
+						// TODO Analytics
+					], cb),
+				cb);
+			},
 
 			// Report rate limit
 			cb => got('https://api.github.com/rate_limit', ghAuth)
@@ -282,8 +345,13 @@ mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 			})
 		], err => {
 			if (err) {
-				log.error(`${err.stack || err.toString()}`);
+				if (err.stack) {
+					log.error(err.stack);
+				} else {
+					log.inspect(err);
+				}
 				if (err.response) {
+					log.error(`URL: ${err.response.url}`);
 					log.inspect(JSON.parse(err.response.body));
 				}
 			}
