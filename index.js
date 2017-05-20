@@ -1,7 +1,6 @@
 const async = require('async');
 const chalk = require('chalk');
 const got = require('got');
-const httpDebug = require('http-debug');
 const mongodb = require('mongodb');
 const mongodbLock = require('mongodb-lock');
 const sntp = require('sntp');
@@ -10,7 +9,7 @@ const sugarDate = require('sugar-date');
 const config = require('./config.json');
 
 const userRegex = new RegExp(`@${config.github.username}`, 'ig');
-const userDateRegex = new RegExp(`^[\\t\\s]*@${config.github.username}[\\t\\s]+([^\\r\\n]+?)(?:[\\t\\s]+to[\\t\\s]*[^\\r\\n]*)?$`, 'igum');
+const userDateRegex = new RegExp(`^[\\t ]*@${config.github.username}(?:[\\t ]+([^\\r\\n]+?)(?:[\\t ]+to[\\t ]*[^\\r\\n]*)?)?$`, 'igum');
 const userLower = config.github.username.toLowerCase();
 
 const cannedLeadIns = [
@@ -58,8 +57,6 @@ function makeBody(body) {
 	return result;
 }
 
-// httpDebug.http.debug = 1;
-
 mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 	if (err) {
 		throw err;
@@ -80,11 +77,8 @@ mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 				.then(response => cb(null, JSON.parse(response.body)))
 				.catch(cb),
 
-			// Filter notifications to only accept mentions
-			(notifications, cb) => cb(null, notifications.filter(n => n.reason === 'mention')),
-
 			// Convert threads to groups of comments (includes issues, issue comments and PR comments all in one)
-			(notifications, cb) => async.map(notifications,
+			(notifications, cb) => async.map(notifications.filter(n => n.reason === 'mention'),
 				(n, cb) => got(`${n.subject.url}/comments`, ghAuth)
 					.then(response => cb(null, JSON.parse(response.body)))
 					.catch(cb),
@@ -135,6 +129,12 @@ mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 					c.invalidDates = []; // Bad strings
 					let match = null;
 					while ((match = userDateRegex.exec(c.body))) {
+						if (!match[1]) {
+							// Introductory comment will be posted.
+							c.invalidDates.push('?');
+							continue;
+						}
+
 						const date = parseDate(match[1]);
 						if (isNaN(date.getTime())) {
 							c.invalidDates.push(match[1]);
@@ -147,6 +147,7 @@ mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 
 			// Convert each comment to action ({reaction: 'up'/'down', comment: null/'some response', record: mongodb_record, analytics: {...}})
 			(notifications, comments, cb) => cb(null, notifications, comments.map(
+				// eslint-disable-next-line complexity
 				c => {
 					const action = {
 						reactions: [], // Make sure to have at least one, or else it'll send a million messages.
@@ -161,6 +162,8 @@ mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 					let heart = false;
 					let confused = false;
 					let party = false;
+
+					let intro = false;
 
 					for (const date of c.validDates) {
 						thumbsUp = true;
@@ -179,6 +182,9 @@ mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 						//
 						// Obviously not a silver bullet here, but maybe you'll have some fun.
 						switch (date.toLowerCase()) {
+							case '?':
+								intro = true;
+								break;
 							case 'i love you':
 								heart = true;
 								break;
@@ -225,6 +231,20 @@ mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 						}
 
 						action.comment = lines.join('\n');
+					} else if (intro && c.validDates.length === 0) {
+						party = true;
+						/* eslint-disable operator-linebreak */
+						action.comment = `Hey there, @${c.user.login}! I'm __RemindMe__, a robot that helps you remember to do things here on GitHub.`
+							+ '\n\nIf you need to remember something, mention me with a time and (optionally) a reminder.'
+							+ '\n\nSome examples of things I respond to:'
+							+ '\n- _@RemindMe in 4 hours to check up on this PR._'
+							+ '\n- _@RemindMe tomorrow to come back to this issue._'
+							+ '\n- _@RemindMe on July 3rd to do a release._'
+							+ '\n- _@RemindMe a year from today to update the copyright notice._'
+							+ '\n\nIf all of the reminders in your comment are OK, I\'ll simply respond with a :+1: thumbs up.'
+							+ ' Otherwise, I\'ll let you know what I didn\'t understand.'
+							+ '\n\nThen when the time comes, I\'ll ping and remind you to come back and have a look! :metal:';
+						/* eslint-enable operator-linebreak */
 					}
 
 					if (thumbsUp) {
