@@ -16,7 +16,6 @@
   ],
   "repository": "remindme/remindme",
   "devDependencies": {
-    "should": "^11.2.1",
     "xo": "^0.18.2"
   },
   "dependencies": {

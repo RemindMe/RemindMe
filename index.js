@@ -12,6 +12,14 @@ const userRegex = new RegExp(`@${config.github.username}`, 'ig');
 const userDateRegex = new RegExp(`^[\\t\\s]*@${config.github.username}[\\t\\s]+([^\\r\\n]+?)(?:[\\t\\s]+to[\\t\\s]*[^\\r\\n]*)?$`, 'igum');
 const userLower = `@${config.github.username}`.toLowerCase();
 
+const cannedLeadIns = [
+	// Want to add some? Make sure they're cordial!
+	'I didn\'t quite catch that. :frowning:',
+	'Terribly sorry, but I didn\'t understand that. :flushed:',
+	'Hmm, not sure what you meant there. :no_mouth:',
+	'Hmm, something\'s not right there. :persevere:'
+];
+
 const ghAuth = {
 	auth: `${config.github.username}:${config.github.token}`,
 	headers: {
@@ -129,15 +137,98 @@ mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 					const action = {
 						reactions: [], // Make sure to have at least one, or else it'll send a million messages.
 						comment: null,
-						record: null,
+						records: [],
 						analytics: null
 					};
 					c.remindAction = action;
 
-					// Dates
+					let thumbsUp = false;
+					let thumbsDown = false;
+					let heart = false;
+					let confused = false;
+					let party = false;
 
+					for (const date of c.validDates) {
+						thumbsUp = true;
+						// TODO add to mongo record
+					}
 
-					// TODO Mongo record
+					const trulyInvalid = [];
+					for (let date of c.invalidDates) {
+						date = date.trim();
+
+						// You've managed to find some easter eggs. That's nice!
+						//
+						// Not only are these easter eggs, but they also cut down on
+						// invalid message handling for when Humans(tm) try to use
+						// @RemindMe by thanking it.
+						//
+						// Obviously not a silver bullet here, but maybe you'll have some fun.
+						switch (date.toLowerCase()) {
+							case 'i love you':
+								heart = true;
+								break;
+							case 'you rock!':
+							case 'you\'re awesome!':
+								party = true;
+								break;
+							case 'thanks':
+							case 'thanks!':
+								party = true;
+								break;
+							default:
+								thumbsDown = true;
+								trulyInvalid.push(date);
+						}
+					}
+
+					if (thumbsUp && thumbsDown) {
+						thumbsUp = false;
+						thumbsDown = false;
+						confused = true; // :)
+					}
+
+					// Should we comment?
+					if (trulyInvalid.length > 0) {
+						const lines = [
+							cannedLeadIns[Math.floor(Math.random() * cannedLeadIns.length)]
+						];
+
+						if (trulyInvalid.length === 1) {
+							lines.push(`I don't quite understand _"${trulyInvalid[0]}"_. Care to try again?`);
+						} else {
+							lines.push('');
+							lines.push('The following didn\'t make sense to me:');
+							for (const str of trulyInvalid) {
+								lines.push(`- ${str}`);
+							}
+
+							if (c.validDates.length > 0) {
+								const phrasing = c.validDates.length === 1 ? 'reminder' : `${c.validDates.length} reminders`;
+								lines.push('');
+								lines.push(`However, I scheduled the other ${phrasing} for you! :dancer:`);
+							}
+						}
+
+						action.comment = lines.join('\n');
+					}
+
+					if (thumbsUp) {
+						action.reactions.push('+1');
+					}
+					if (thumbsDown) {
+						action.reactions.push('-1');
+					}
+					if (confused) {
+						action.reactions.push('confused');
+					}
+					if (heart) {
+						action.reactions.push('heart');
+					}
+					if (party) {
+						action.reactions.push('hooray');
+					}
+
 					// TODO Analytics
 
 					return c;
