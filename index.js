@@ -1,6 +1,5 @@
 const async = require('async');
 const chalk = require('chalk');
-// const grl = require('global-request-logger');
 const got = require('got');
 const httpDebug = require('http-debug');
 const mongodb = require('mongodb');
@@ -59,7 +58,7 @@ function makeBody(body) {
 	return result;
 }
 
-httpDebug.http.debug = 1;
+// httpDebug.http.debug = 1;
 
 mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 	if (err) {
@@ -206,23 +205,23 @@ mongodb.MongoClient.connect(mdbConnectString, (err, db) => {
 					// Should we comment?
 					if (trulyInvalid.length > 0) {
 						const lines = [
-							cannedLeadIns[Math.floor(Math.random() * cannedLeadIns.length)]
+							cannedLeadIns[Math.floor(Math.random() * cannedLeadIns.length)],
+							''
 						];
 
 						if (trulyInvalid.length === 1) {
 							lines.push(`I don't quite understand _"${trulyInvalid[0]}"_. Care to try again?`);
 						} else {
-							lines.push('');
 							lines.push('The following didn\'t make sense to me:');
 							for (const str of trulyInvalid) {
 								lines.push(`- ${str}`);
 							}
+						}
 
-							if (c.validDates.length > 0) {
-								const phrasing = c.validDates.length === 1 ? 'reminder' : `${c.validDates.length} reminders`;
-								lines.push('');
-								lines.push(`However, I scheduled the other ${phrasing} for you! :dancer:`);
-							}
+						if (c.validDates.length > 0) {
+							const phrasing = c.validDates.length === 1 ? 'reminder' : `${c.validDates.length} reminders`;
+							lines.push('');
+							lines.push(`However, I scheduled the other ${phrasing} for you! :dancer:`);
 						}
 
 						action.comment = lines.join('\n');
